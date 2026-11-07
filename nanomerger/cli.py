@@ -140,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "doctor":
             packages = {}
-            for name in ("ezdxf", "matplotlib", "Pillow", "PySide6"):
+            for name in ("ezdxf", "matplotlib", "Pillow", "PySide6-Essentials"):
                 try:
                     packages[name] = metadata.version(name)
                 except metadata.PackageNotFoundError:
@@ -148,7 +148,13 @@ def main(argv: list[str] | None = None) -> int:
             import importlib
 
             imports = {}
-            for module in ("ezdxf", "matplotlib.figure", "PIL.Image", "PySide6.QtWidgets"):
+            for module in (
+                "ezdxf",
+                "matplotlib.figure",
+                "PIL.Image",
+                "PySide6.QtWidgets",
+                "PySide6.QtSvg",
+            ):
                 try:
                     importlib.import_module(module)
                     imports[module] = None
@@ -177,7 +183,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"NanoMerger {__version__} | Python {data['python']}")
                 for name, version in packages.items():
                     print(
-                        f"  {name}: {version or 'не установлен' + (' (необязательно для CLI)' if name == 'PySide6' else '')}"
+                        f"  {name}: {version or 'не установлен' + (' (необязательно для CLI)' if name.startswith('PySide6') else '')}"
                     )
                 for module, error in imports.items():
                     if error:

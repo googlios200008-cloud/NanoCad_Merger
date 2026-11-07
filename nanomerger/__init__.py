@@ -1,6 +1,6 @@
 """NanoMerger: embeddable CAD merging core. Importing this package does not load Qt."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from .errors import (
     CancelledError,

@@ -13,8 +13,16 @@
    dist\NanoMerger\NanoMerger.exe
    ```
 
-Скрипт сам создаёт `.venv-build`, устанавливает GUI-зависимости и PyInstaller,
-собирает приложение и кладёт рядом памятку `START_HERE.txt` и лицензии.
+Скрипт сам создаёт окружение сборки, устанавливает PySide6 Essentials и
+PyInstaller, собирает приложение и кладёт рядом памятку `START_HERE.txt` и
+лицензии. На Windows окружение по умолчанию находится в коротком пути:
+
+```text
+%LOCALAPPDATA%\NanoMerger\BuildEnvs\py312-amd64-<хэш проекта>
+```
+
+Это защищает от ошибки Windows «path too long / No such file or directory» при
+распаковке Qt. Старый `.venv-build` внутри длинной папки Downloads не нужен.
 
 ## Один файл EXE
 
@@ -39,6 +47,20 @@ dist\NanoMerger.exe
 `--onefile` удобнее пересылать, но он больше и дольше стартует, потому что
 распаковывает Qt и библиотеки во временную папку. Для постоянного рабочего места
 рекомендуется папочный вариант: распространяйте `dist\NanoMerger` целиком.
+
+## Повтор после оборванной установки
+
+Если предыдущая установка оборвалась, пересоздайте окружение сборки:
+
+```powershell
+python build_exe.py --recreate-venv
+```
+
+Можно задать свой короткий каталог:
+
+```powershell
+python build_exe.py --venv-dir C:\NanoMerger-build
+```
 
 ## Если зависимости уже установлены в проектном venv
 
@@ -85,3 +107,10 @@ python build_exe.py --use-current-env
 **DWG не открывается.** Это не ошибка PyInstaller: установите ODA и проверьте
 путь. PDF в текущей версии — векторный предпросмотр геометрии, не точная печать
 CAD с CTB/STB.
+
+**`PySide6\qml\...FluentWinUI3...png: No such file or directory`.** Это лимит
+длины пути Windows при установке полного PySide6 в глубокую папку Downloads.
+Обновите `build_exe.py`: он использует PySide6 Essentials и короткое окружение
+сборки. Запустите `python build_exe.py --recreate-venv`. Если ошибка осталась,
+перенесите проект в короткий путь, например `C:\Dev\NanoMerger`, или включите
+Windows Long Path support штатными средствами Windows.

@@ -8,7 +8,7 @@ by pip and retain their own licenses:
 | ezdxf 1.4.3 | DXF parsing, entities, layouts, rendering frontend | MIT |
 | matplotlib | Vector PDF backend | PSF-based matplotlib license |
 | Pillow | Image support required by the ezdxf drawing frontend | MIT-CMU |
-| PySide6 (optional GUI) | Desktop shell and Engi window integration | LGPLv3 or commercial Qt license; review obligations when bundling an EXE |
+| PySide6 Essentials (optional GUI) | Desktop shell and Engi window integration; Qt Core/Gui/Widgets/Svg; the full PySide6 Addons metapackage is not required | LGPLv3 or commercial Qt license; review obligations when bundling an EXE |
 | ODA File Converter | External DWG/DXF conversion executable | Proprietary ODA terms; user installs separately, not bundled or downloaded by NanoMerger |
 | pypdf (dev/tests only) | PDF assertions in tests | BSD |
 

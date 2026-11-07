@@ -9,13 +9,17 @@
 Один самодостаточный EXE (медленнее старт, больше размер):
     python build_exe.py --onefile
 
-Скрипт по умолчанию создаёт отдельное окружение .venv-build и устанавливает
-зависимости сам. ODA File Converter НЕ скачивается и НЕ упаковывается в EXE.
+Скрипт создаёт отдельное окружение сборки и устанавливает зависимости сам.
+На Windows окружение по умолчанию находится в коротком пути
+%LOCALAPPDATA%/NanoMerger/BuildEnvs/..., чтобы не упираться в лимит 260 символов.
+Используется PySide6 Essentials вместо полного метапакета PySide6 + Addons. ODA File Converter
+НЕ скачивается и НЕ упаковывается в EXE.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import platform
 import shlex
@@ -29,9 +33,30 @@ APP_NAME = "NanoMerger"
 ENTRY = ROOT / "nanomerger" / "desktop_entry.py"
 ICON = ROOT / "nanomerger" / "assets" / "icon.ico"
 LOGO = ROOT / "nanomerger" / "assets" / "logo.svg"
-BUILD_VENV = ROOT / ".venv-build"
 MIN_PYTHON = (3, 10)
 MAX_PYTHON = (3, 13)  # совместимо с закреплённой веткой PySide6 6.8–6.9
+
+
+def default_build_venv(
+    *,
+    windows: bool | None = None,
+    root: Path = ROOT,
+    local_app_data: Path | None = None,
+    version: tuple[int, int] | None = None,
+    machine: str | None = None,
+) -> Path:
+    """Keep Windows build environments short and isolated per project/Python."""
+    windows = os.name == "nt" if windows is None else windows
+    if not windows:
+        return root / ".venv-build"
+    base = local_app_data or Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    version = version or sys.version_info[:2]
+    machine = (machine or platform.machine()).lower()
+    digest = hashlib.sha256(str(root).encode("utf-8")).hexdigest()[:8]
+    return base / "NanoMerger" / "BuildEnvs" / f"py{version[0]}{version[1]}-{machine}-{digest}"
+
+
+BUILD_VENV = default_build_venv()
 
 
 def check_python(version: tuple[int, int] | None = None) -> None:
@@ -51,22 +76,33 @@ def run(command: list[str | Path], *, cwd: Path = ROOT) -> None:
     subprocess.run(args, cwd=cwd, check=True)
 
 
-def venv_python() -> Path:
-    return BUILD_VENV / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+def venv_python(venv_dir: Path | None = None) -> Path:
+    venv_dir = venv_dir or BUILD_VENV
+    return venv_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+
+
+def selected_build_venv(args: argparse.Namespace) -> Path:
+    return Path(args.venv_dir).expanduser().resolve() if args.venv_dir else BUILD_VENV
 
 
 def ensure_build_python(args: argparse.Namespace) -> Path:
     if args.use_current_env:
         return Path(sys.executable)
-    python = venv_python()
-    if python.is_file():
+    venv_dir = selected_build_venv(args)
+    python = venv_python(venv_dir)
+    if args.recreate_venv and venv_dir.exists():
+        if not (venv_dir / "pyvenv.cfg").is_file():
+            raise SystemExit(f"Отказываюсь удалять папку без pyvenv.cfg: {venv_dir}")
+        print(f"Пересоздание окружения сборки: {venv_dir}")
+        shutil.rmtree(venv_dir)
+    if python.is_file() and not args.recreate_venv:
         return python
     if args.skip_install:
         raise SystemExit(
-            f"Окружение сборки не найдено: {BUILD_VENV}. Запустите без --skip-install "
+            f"Окружение сборки не найдено: {venv_dir}. Запустите без --skip-install "
             "или используйте --use-current-env для интерпретатора PyCharm."
         )
-    run([sys.executable, "-m", "venv", str(BUILD_VENV)])
+    run([sys.executable, "-m", "venv", str(venv_dir)])
     if not python.is_file():
         raise SystemExit(f"Не удалось создать окружение сборки: {python}")
     return python
@@ -75,7 +111,11 @@ def ensure_build_python(args: argparse.Namespace) -> Path:
 def install_dependencies(python: Path, args: argparse.Namespace) -> None:
     if args.skip_install:
         probe = subprocess.run(
-            [str(python), "-c", "import PyInstaller, PySide6, ezdxf, matplotlib, nanomerger"],
+            [
+                str(python),
+                "-c",
+                "import PyInstaller, PySide6.QtWidgets, PySide6.QtSvg, ezdxf, matplotlib, nanomerger",
+            ],
             cwd=ROOT,
             capture_output=True,
             text=True,
@@ -194,7 +234,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--use-current-env",
         action="store_true",
-        help="собирать текущим интерпретатором PyCharm, не создавать .venv-build",
+        help="собирать текущим интерпретатором PyCharm, не создавать окружение сборки",
+    )
+    parser.add_argument(
+        "--venv-dir",
+        type=Path,
+        default=None,
+        help="свой каталог окружения сборки; на Windows по умолчанию короткий путь в LOCALAPPDATA",
+    )
+    parser.add_argument(
+        "--recreate-venv",
+        action="store_true",
+        help="удалить и заново создать окружение сборки (полезно после оборванной установки)",
     )
     parser.add_argument(
         "--skip-install",
@@ -219,7 +270,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     check_python()
     if args.dry_run:
-        python = Path(sys.executable) if args.use_current_env else venv_python()
+        python = (
+            Path(sys.executable) if args.use_current_env else venv_python(selected_build_venv(args))
+        )
         command = build_command(python, args)
         print("Команда сборки (dry run):")
         print(subprocess.list2cmdline(command) if os.name == "nt" else shlex.join(command))
@@ -255,6 +308,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     except subprocess.CalledProcessError as exc:
         print(f"\nОшибка команды, код {exc.returncode}. Смотрите вывод выше.", file=sys.stderr)
+        if not args.use_current_env:
+            print(
+                "Если установка оборвалась, повторите с --recreate-venv. "
+                "Скрипт использует PySide6 Essentials и короткое окружение сборки; "
+                "старый повреждённый .venv-build в проекте больше не требуется.",
+                file=sys.stderr,
+            )
         return exc.returncode or 1
     except KeyboardInterrupt:
         print("\nСборка прервана пользователем.", file=sys.stderr)

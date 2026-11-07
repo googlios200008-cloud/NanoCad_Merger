@@ -73,3 +73,23 @@ def test_distribution_notes_mention_external_oda(tmp_path):
     notes = (exe.parent / "START_HERE.txt").read_text(encoding="utf-8")
     assert "ODA File Converter" in notes
     assert (exe.parent / "THIRD_PARTY_NOTICES.md").exists()
+
+
+def test_windows_default_build_environment_is_short(tmp_path):
+    root = tmp_path / ("very-long-project-" * 8)
+    venv = build_exe.default_build_venv(
+        windows=True, root=root, local_app_data=tmp_path / "Local", version=(3, 12), machine="AMD64"
+    )
+    assert venv.parent == tmp_path / "Local" / "NanoMerger" / "BuildEnvs"
+    assert venv.name.startswith("py312-amd64-")
+    assert len(str(venv)) < len(str(root / ".venv-build"))
+
+
+def test_recreate_refuses_non_venv_directory(tmp_path, monkeypatch):
+    fake = tmp_path / "not-a-venv"
+    fake.mkdir()
+    monkeypatch.setattr(build_exe, "BUILD_VENV", fake)
+    args = build_exe.parse_args(["--recreate-venv"])
+    with pytest.raises(SystemExit, match="pyvenv.cfg"):
+        build_exe.ensure_build_python(args)
+    assert fake.exists()
